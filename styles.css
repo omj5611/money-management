@@ -203,7 +203,7 @@ h3 {
 .spending-screen {
   display: grid;
   gap: 0;
-  padding: 0;
+  padding: 8px 0 0;
   background: #fff;
 }
 
