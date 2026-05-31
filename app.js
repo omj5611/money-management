@@ -79,7 +79,9 @@ form.addEventListener("submit", (event) => {
   event.preventDefault();
   const handler = form.dataset.handler;
   const id = form.dataset.id || undefined;
-  const data = Object.fromEntries(new FormData(form).entries());
+  const formData = new FormData(form);
+  const data = Object.fromEntries(formData.entries());
+  data.linkedCategoryIds = formData.getAll("linkedCategoryIds").join(",");
   handlers[handler](data, id);
   dialog.close();
   saveState();
@@ -823,40 +825,51 @@ function renderAnalytics() {
 
 function renderGoals() {
   setTitle("저축 목표");
-  const totalSaved = getTotalSaved();
+  const activeGoals = state.goals.filter((goal) => getGoalState(goal) === "active");
+  const completedGoals = state.goals.filter((goal) => getGoalState(goal) !== "active");
   app.innerHTML = `
-    ${sectionSwitcher("insightsView", insightsView, [["goals", "목표"], ["analytics", "지출 분석"]])}
-    ${summaryCard("현재 반영 저축액", totalSaved, periodKey, [
-      ["목표 수", `${state.goals.length}개`],
-      ["고정 저축 완료", getSummary().completedFixedSaving],
-      ["추가 저축", getSummary().extraSaving],
-      ["초기 저축", state.goals.reduce((sum, goal) => sum + Number(goal.initialAmount || 0), 0)]
-    ])}
-    <div class="toolbar"><button class="primary-button" data-action="new-goal" type="button">목표 추가</button></div>
-    <section class="list-card">
-      <div class="section-title"><h3>목표 목록</h3><span class="muted">${state.goals.length}개</span></div>
-      <div class="money-list">${state.goals.length ? state.goals.map(goalItem).join("") : empty("저축 목표를 추가해보세요.")}</div>
+    <section class="goals-screen">
+      <div class="goals-header">
+        <div class="goals-tabs">
+          <button class="goals-tab active" data-segment-group="insightsView" data-value="goals" type="button">저축 목표</button>
+          <button class="goals-tab" data-segment-group="insightsView" data-value="analytics" type="button">지출 분석</button>
+        </div>
+        <button class="goal-add-button" data-action="new-goal" type="button">+ 목표 추가</button>
+      </div>
+      <div class="goal-card-list">
+        ${activeGoals.length ? activeGoals.map(goalCard).join("") : empty("저축 목표를 추가해보세요.")}
+      </div>
+      <section class="completed-goals">
+        <p class="completed-goals-title">완료된 목표</p>
+        <div class="goal-card-list compact">
+          ${completedGoals.length ? completedGoals.map(goalCard).join("") : empty("완료된 목표가 없습니다.")}
+        </div>
+      </section>
     </section>
   `;
   bindCommonActions();
 }
 
-function goalItem(goal) {
+function goalCard(goal) {
   const saved = goalSavedAmount(goal);
   const rate = Math.min(100, Math.round((saved / Number(goal.targetAmount || 1)) * 100));
-  const rest = Math.max(0, Number(goal.targetAmount) - saved);
-  const months = Math.max(1, monthsUntil(goal.endDate));
+  const goalState = getGoalState(goal);
+  const stateLabel = goalState === "completed" ? "성공" : goalState === "failed" ? "실패" : `D-${daysUntil(goal.endDate)}`;
+  const linkedLabel = goalCategoryNames(goal).join(" · ") || "연결 없음";
   return `
-    <article class="money-item">
-      <span class="pill green">${rate}%</span>
-      <div class="item-body">
-        <div class="item-title-row"><strong>${escapeHtml(goal.name)}</strong><span class="pill">${goal.endDate}</span></div>
-        <p class="item-meta">${money(saved)} / ${money(goal.targetAmount)} · 남은 금액 ${money(rest)}</p>
-        <div class="bar" aria-hidden="true"><div class="bar-fill" style="width:${rate}%; background:var(--green)"></div></div>
-        <p class="item-meta">월 필요 저축액 ${money(Math.ceil(rest / months))}</p>
+    <article class="goal-card ${goalState}" data-action="open-goal-detail" data-id="${goal.id}" role="button" tabindex="0">
+      <div class="goal-card-top">
+        <strong class="goal-dday">${stateLabel}</strong>
+        <div class="goal-title-line">
+          <strong>${escapeHtml(goal.name)}</strong>
+          <span>${formatGoalDate(goal.startDate)} - ${formatGoalDate(goal.endDate)}</span>
+        </div>
+        <span class="goal-link-label">${escapeHtml(linkedLabel)}</span>
       </div>
-      <div class="item-actions">
-        <button class="secondary-button" data-action="edit-goal" data-id="${goal.id}" type="button">수정</button>
+      <p class="goal-amount-line"><strong>${money(saved)}</strong><span>/ ${money(goal.targetAmount)}</span></p>
+      <div class="goal-progress-row">
+        <span>${rate}%</span>
+        <div class="goal-progress"><div style="width:${rate}%"></div></div>
       </div>
     </article>
   `;
@@ -966,7 +979,9 @@ function handleAction(action, id, dataset = {}) {
     "edit-category": () => openCategoryEditor(findById(state.categories, id)),
     "delete-category": () => deleteCategory(id),
     "new-goal": () => openGoalEditor(),
-    "edit-goal": () => openGoalEditor(findById(state.goals, id))
+    "edit-goal": () => openGoalEditor(findById(state.goals, id)),
+    "delete-goal": () => deleteGoal(id),
+    "open-goal-detail": () => openGoalDetailDialog(findById(state.goals, id))
   };
   actionMap[action]?.();
 }
@@ -1023,6 +1038,41 @@ function openStatCategoryDialog(statKey) {
       </div>
     `
   );
+}
+
+function openGoalDetailDialog(goal) {
+  if (!goal) return;
+  const items = goalContributionItems(goal);
+  const saved = goalSavedAmount(goal);
+  openViewDialog(
+    `${goal.name} 모은 내역`,
+    `
+      <div class="dialog-summary">
+        <span>${formatGoalDate(goal.startDate)} - ${formatGoalDate(goal.endDate)}</span>
+        <strong>${money(saved)}</strong>
+      </div>
+      <div class="goal-detail-list">
+        ${items.length ? items.map(goalContributionItem).join("") : empty("아직 모은 내역이 없습니다.")}
+      </div>
+      <div class="dialog-toolbar">
+        <button class="secondary-button" data-view-action="edit-goal" data-id="${goal.id}" type="button">수정</button>
+        <button class="danger-button" data-view-action="delete-goal" data-id="${goal.id}" type="button">삭제</button>
+      </div>
+    `
+  );
+}
+
+function goalContributionItem(item) {
+  return `
+    <article class="goal-detail-item">
+      <div>
+        <span>${formatGoalDate(item.date)}</span>
+        <strong>${escapeHtml(item.name)}</strong>
+        <p>${escapeHtml(item.source)}</p>
+      </div>
+      <strong>${money(item.amount)}</strong>
+    </article>
+  `;
 }
 
 function openFixedSettingsDialog(tab = "ongoing") {
@@ -1103,6 +1153,8 @@ function bindViewDialogActions(viewDialog) {
       if (action === "edit-fixed") openFixedEditor(findById(state.fixedExpenses, button.dataset.id));
       if (action === "delete-fixed") deleteFixedExpense(button.dataset.id);
       if (action === "configure-stat") openStatCategoryDialog(button.dataset.statKey);
+      if (action === "edit-goal") openGoalEditor(findById(state.goals, button.dataset.id));
+      if (action === "delete-goal") deleteGoal(button.dataset.id);
     });
   });
   viewDialog.querySelectorAll("[data-action]").forEach((button) => {
@@ -1197,9 +1249,7 @@ function openGoalEditor(item = {}) {
     field("targetAmount", "목표 금액", "number", item.targetAmount, true),
     field("startDate", "시작일", "date", item.startDate || isoDate(today), true),
     field("endDate", "종료일", "date", item.endDate, true),
-    field("linkedCategoryIds", "연결 카테고리 ID", "text", (item.linkedCategoryIds || []).join(",")),
-    field("linkedFixedExpenseIds", "연결 고정지출 ID", "text", (item.linkedFixedExpenseIds || []).join(",")),
-    field("initialAmount", "초기 저축액", "number", item.initialAmount || 0),
+    categoryCheckboxes("linkedCategoryIds", "연결할 카테고리", item.linkedCategoryIds || [], "saving"),
     textArea("memo", "메모", item.memo)
   ]);
 }
@@ -1208,8 +1258,10 @@ function openEditor(name, handler, id, htmlFields) {
   editorTitle.textContent = `${name} ${id ? "수정" : "추가"}`;
   fields.innerHTML = htmlFields.join("");
   form.querySelector("[data-editor-delete]")?.remove();
+  dialog.classList.toggle("bottom-sheet", ["fixed", "goal"].includes(handler));
   form.dataset.handler = handler;
   form.dataset.id = id || "";
+  bindNumberInputs(fields);
   dialog.showModal();
 }
 
@@ -1227,18 +1279,22 @@ function addEditorDeleteButton(label, action, id) {
   form.querySelector(".sheet-actions")?.prepend(button);
 }
 
+function confirmDelete() {
+  return confirm("정말 삭제하시겠습니까?");
+}
+
 const handlers = {
   fixed(data, id) {
     const item = {
       id: id || makeId("fixed"),
       name: data.name.trim(),
-      amount: Number(data.amount),
+      amount: parseNumberInput(data.amount),
       categoryId: data.categoryId,
       type: data.type,
       withdrawalAccountId: data.withdrawalAccountId,
       toAccount: data.toAccount.trim(),
       transferType: data.transferType,
-      paymentDay: clamp(Number(data.paymentDay), 1, 31),
+      paymentDay: clamp(parseNumberInput(data.paymentDay), 1, 31),
       cycle: data.cycle,
       startDate: data.startDate,
       maturityDate: data.maturityDate,
@@ -1252,7 +1308,7 @@ const handlers = {
     upsert(state.expenses, {
       id: id || makeId("expense"),
       name: data.name.trim(),
-      amount: Number(data.amount),
+      amount: parseNumberInput(data.amount),
       categoryId: data.categoryId,
       type: data.type,
       date: data.date,
@@ -1290,12 +1346,12 @@ const handlers = {
     upsert(state.goals, {
       id: id || makeId("goal"),
       name: data.name.trim(),
-      targetAmount: Number(data.targetAmount),
+      targetAmount: parseNumberInput(data.targetAmount),
       startDate: data.startDate,
       endDate: data.endDate,
       linkedCategoryIds: csv(data.linkedCategoryIds),
-      linkedFixedExpenseIds: csv(data.linkedFixedExpenseIds),
-      initialAmount: Number(data.initialAmount || 0),
+      linkedFixedExpenseIds: [],
+      initialAmount: 0,
       memo: data.memo.trim()
     });
   }
@@ -1322,7 +1378,7 @@ async function toggleFixed(id) {
 async function deleteFixedExpense(id) {
   const item = findById(state.fixedExpenses, id);
   if (!item) return;
-  if (!confirm(`${item.name} 고정지출을 삭제할까요?`)) return;
+  if (!confirmDelete()) return;
 
   closeViewDialog();
   state.fixedExpenses = state.fixedExpenses.filter((entry) => entry.id !== id);
@@ -1338,11 +1394,7 @@ async function deleteFixedExpense(id) {
 async function deleteCategory(id) {
   const category = findById(state.categories, id);
   if (!category) return;
-  const usedCount = state.fixedExpenses.filter((item) => item.categoryId === id).length + state.expenses.filter((item) => item.categoryId === id).length;
-  const message = usedCount
-    ? `${category.name} 카테고리를 삭제할까요? 연결된 ${usedCount}개 내역은 미분류로 변경됩니다.`
-    : `${category.name} 카테고리를 삭제할까요?`;
-  if (!confirm(message)) return;
+  if (!confirmDelete()) return;
 
   state.categories = state.categories.filter((entry) => entry.id !== id);
   state.fixedExpenses.forEach((item) => {
@@ -1358,6 +1410,17 @@ async function deleteCategory(id) {
     state.fixedStatCategories[key] = state.fixedStatCategories[key].filter((entryId) => entryId !== id);
   });
   await deleteSupabaseRow("categories", id);
+  saveState();
+  render();
+}
+
+async function deleteGoal(id) {
+  const goal = findById(state.goals, id);
+  if (!goal) return;
+  if (!confirmDelete()) return;
+
+  closeViewDialog();
+  state.goals = state.goals.filter((entry) => entry.id !== id);
   saveState();
   render();
 }
@@ -1476,6 +1539,50 @@ function goalSavedAmount(goal) {
   return Number(goal.initialAmount || 0) + fixedSaving + variableSaving;
 }
 
+function goalContributionItems(goal) {
+  const linkedCategories = new Set(goal.linkedCategoryIds || []);
+  const linkedFixed = new Set(goal.linkedFixedExpenseIds || []);
+  const fixedItems = state.fixedExpenses
+    .filter((item) => item.type === "saving" && (linkedFixed.has(item.id) || linkedCategories.has(item.categoryId)) && getFixedStatus(item) === "completed")
+    .map((item) => {
+      const log = getLog(item.id);
+      return {
+        date: log?.completedDate || log?.scheduledDate || scheduledDate(item.paymentDay),
+        name: item.name,
+        amount: Number(log?.actualAmount || item.amount),
+        source: "고정지출"
+      };
+    });
+  const variableItems = state.expenses
+    .filter((item) => item.type === "saving" && linkedCategories.has(item.categoryId))
+    .map((item) => ({ date: item.date, name: item.name, amount: Number(item.amount), source: "소비지출" }));
+  return [...fixedItems, ...variableItems].sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function goalCategoryNames(goal) {
+  return (goal.linkedCategoryIds || []).map((id) => findById(state.categories, id)?.name).filter(Boolean);
+}
+
+function getGoalState(goal) {
+  const saved = goalSavedAmount(goal);
+  if (saved >= Number(goal.targetAmount || 0)) return "completed";
+  if (goal.endDate && goal.endDate < isoDate(today)) return "failed";
+  return "active";
+}
+
+function daysUntil(dateText) {
+  const end = new Date(`${dateText}T00:00:00`);
+  if (Number.isNaN(end.getTime())) return 0;
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return Math.max(0, Math.ceil((end - start) / 86400000));
+}
+
+function formatGoalDate(dateText) {
+  if (!dateText) return "";
+  const [year, month, day] = dateText.split("-");
+  return `${String(year).slice(2)}.${month}.${day}`;
+}
+
 function getTotalSaved() {
   return state.goals.reduce((sum, goal) => sum + goalSavedAmount(goal), 0);
 }
@@ -1524,6 +1631,9 @@ function chartRows(items) {
 }
 
 function field(name, label, type, value = "", required = false, min = "", max = "") {
+  if (type === "number") {
+    return `<div class="field"><label for="${name}">${label}</label><input id="${name}" name="${name}" type="text" inputmode="numeric" data-number-format="true" value="${escapeAttr(formatInputNumber(value || ""))}" ${required ? "required" : ""} ${min ? `data-min="${min}"` : ""} ${max ? `data-max="${max}"` : ""}></div>`;
+  }
   return `<div class="field"><label for="${name}">${label}</label><input id="${name}" name="${name}" type="${type}" value="${escapeAttr(value || "")}" ${required ? "required" : ""} ${min ? `min="${min}"` : ""} ${max ? `max="${max}"` : ""}></div>`;
 }
 
@@ -1533,6 +1643,37 @@ function textArea(name, label, value = "") {
 
 function selectField(name, label, value, options) {
   return `<div class="field"><label for="${name}">${label}</label><select id="${name}" name="${name}">${options.map(([key, text]) => `<option value="${escapeAttr(key)}" ${String(value) === String(key) ? "selected" : ""}>${escapeHtml(text)}</option>`).join("")}</select></div>`;
+}
+
+function categoryCheckboxes(name, label, selectedIds = [], type = "saving") {
+  const selected = new Set(selectedIds || []);
+  const categories = state.categories.filter((category) => category.isActive && category.type === type);
+  return `
+    <div class="field">
+      <span class="field-label">${label}</span>
+      <div class="form-check-list">
+        ${categories.length ? categories.map((category) => `
+          <label class="form-check-row">
+            <input name="${name}" type="checkbox" value="${category.id}" ${selected.has(category.id) ? "checked" : ""}>
+            <span class="color-dot" style="--dot:${category.color || "#8e8e93"}"></span>
+            <span>${escapeHtml(category.name)}</span>
+          </label>
+        `).join("") : `<p class="form-help">설정 탭에서 카테고리를 먼저 추가해주세요.</p>`}
+      </div>
+    </div>
+  `;
+}
+
+function bindNumberInputs(root) {
+  root.querySelectorAll("[data-number-format]").forEach((input) => {
+    input.value = formatInputNumber(input.value);
+    input.addEventListener("input", () => {
+      const cursorFromEnd = input.value.length - input.selectionStart;
+      input.value = formatInputNumber(input.value);
+      const nextPosition = Math.max(0, input.value.length - cursorFromEnd);
+      input.setSelectionRange(nextPosition, nextPosition);
+    });
+  });
 }
 
 function accountOptions() {
@@ -1565,6 +1706,15 @@ function isoDate(date) {
 
 function money(value) {
   return `${new Intl.NumberFormat("ko-KR").format(Number(value || 0))}원`;
+}
+
+function parseNumberInput(value) {
+  return Number(String(value || "").replace(/,/g, "")) || 0;
+}
+
+function formatInputNumber(value) {
+  const digits = String(value || "").replace(/[^\d]/g, "");
+  return digits ? new Intl.NumberFormat("ko-KR").format(Number(digits)) : "";
 }
 
 function typeLabel(value) {
