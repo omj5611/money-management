@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Money Management</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="top-bar">
+        <div>
+          <p class="eyebrow" id="todayLabel"></p>
+          <h1 id="screenTitle">고정지출</h1>
+        </div>
+        <button class="icon-button" id="resetDemoButton" type="button" title="샘플 데이터 복원" aria-label="샘플 데이터 복원">
+          <svg class="line-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v6h6"></path></svg>
+        </button>
+      </header>
+
+      <main id="app" class="screen"></main>
+
+      <nav class="tab-bar" aria-label="주요 화면">
+        <a class="tab-item" href="index.html" data-section="spending">지출</a>
+        <a class="tab-item" href="insights.html" data-section="insights">분석</a>
+        <a class="tab-item active" href="settings.html" data-section="settings">설정</a>
+      </nav>
+    </div>
+
+    <dialog id="editorDialog" class="sheet">
+      <form method="dialog" id="editorForm" class="sheet-panel">
+        <div class="sheet-header">
+          <h2 id="editorTitle"></h2>
+          <button class="icon-button" value="cancel" type="submit" aria-label="닫기">
+            <svg class="line-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+          </button>
+        </div>
+        <div id="editorFields" class="form-grid"></div>
+        <menu class="sheet-actions">
+          <button class="secondary-button" value="cancel" type="submit">취소</button>
+          <button class="primary-button" id="saveButton" value="default" type="submit">저장</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
