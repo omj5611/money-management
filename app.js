@@ -139,9 +139,23 @@ async function initSupabase() {
     return;
   }
 
-  supabaseClient = window.supabase.createClient(config.url, config.anonKey);
+  supabaseClient = window.supabase.createClient(config.url, config.anonKey, {
+    auth: {
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      persistSession: true,
+      storage: window.localStorage
+    }
+  });
 
   try {
+    const authCode = new URLSearchParams(window.location.search).get("code");
+    if (authCode) {
+      const { error } = await supabaseClient.auth.exchangeCodeForSession(authCode);
+      if (error) throw error;
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     const { data: sessionData } = await supabaseClient.auth.getSession();
     const user = sessionData.session?.user;
 
