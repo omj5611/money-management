@@ -1,4 +1,5 @@
 const STORAGE_KEY = "money-management-state-v1";
+const CATEGORY_CLEAR_KEY = "money-management-categories-cleared-20260601";
 
 const today = new Date();
 const periodKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
@@ -9,35 +10,27 @@ const defaultState = {
     { id: "account_002", name: "월급통장", institution: "국민은행", accountType: "bank", lastFourDigits: "5611", isDefault: false, color: "#30d158", memo: "", isActive: true },
     { id: "account_003", name: "현대카드", institution: "현대카드", accountType: "card", lastFourDigits: "0910", isDefault: false, color: "#0a84ff", memo: "", isActive: true }
   ],
-  categories: [
-    { id: "housing", name: "주거", type: "expense", availableTabs: ["fixed"], color: "#ff9500", icon: "⌂", isActive: true },
-    { id: "subscription", name: "구독", type: "expense", availableTabs: ["fixed", "variable"], color: "#af52de", icon: "◫", isActive: true },
-    { id: "food", name: "식비", type: "expense", availableTabs: ["variable"], color: "#ff3b30", icon: "◉", isActive: true },
-    { id: "cafe", name: "카페", type: "expense", availableTabs: ["variable"], color: "#a2845e", icon: "◌", isActive: true },
-    { id: "transport", name: "교통", type: "expense", availableTabs: ["variable"], color: "#5e5ce6", icon: "◇", isActive: true },
-    { id: "installment_saving", name: "적금", type: "saving", availableTabs: ["fixed"], color: "#34c759", icon: "◎", isActive: true },
-    { id: "emergency_fund", name: "비상금", type: "saving", availableTabs: ["fixed", "variable"], color: "#30b0c7", icon: "◍", isActive: true }
-  ],
+  categories: [],
   fixedExpenses: [
-    { id: "fixed_001", name: "청년적금", amount: 300000, categoryId: "installment_saving", type: "saving", withdrawalAccountId: "account_002", toAccount: "신한 적금통장", transferType: "auto", paymentDay: 10, cycle: "monthly", startDate: `${today.getFullYear()}-01-10`, maturityDate: `${today.getFullYear() + 1}-01-10`, autoComplete: false, memo: "매월 자동이체" },
-    { id: "fixed_002", name: "월세", amount: 500000, categoryId: "housing", type: "expense", withdrawalAccountId: "account_001", toAccount: "집주인 계좌", transferType: "manual", paymentDay: 5, cycle: "monthly", startDate: `${today.getFullYear()}-01-05`, maturityDate: "", autoComplete: false, memo: "" },
-    { id: "fixed_003", name: "통신비", amount: 69000, categoryId: "subscription", type: "expense", withdrawalAccountId: "account_003", toAccount: "통신사", transferType: "auto", paymentDay: 25, cycle: "monthly", startDate: `${today.getFullYear()}-01-25`, maturityDate: "", autoComplete: false, memo: "" }
+    { id: "fixed_001", name: "청년적금", amount: 300000, categoryId: "", type: "saving", withdrawalAccountId: "account_002", toAccount: "신한 적금통장", transferType: "auto", paymentDay: 10, cycle: "monthly", startDate: `${today.getFullYear()}-01-10`, maturityDate: `${today.getFullYear() + 1}-01-10`, autoComplete: false, memo: "매월 자동이체" },
+    { id: "fixed_002", name: "월세", amount: 500000, categoryId: "", type: "expense", withdrawalAccountId: "account_001", toAccount: "집주인 계좌", transferType: "manual", paymentDay: 5, cycle: "monthly", startDate: `${today.getFullYear()}-01-05`, maturityDate: "", autoComplete: false, memo: "" },
+    { id: "fixed_003", name: "통신비", amount: 69000, categoryId: "", type: "expense", withdrawalAccountId: "account_003", toAccount: "통신사", transferType: "auto", paymentDay: 25, cycle: "monthly", startDate: `${today.getFullYear()}-01-25`, maturityDate: "", autoComplete: false, memo: "" }
   ],
   fixedLogs: [
     { id: "log_001", fixedExpenseId: "fixed_002", periodKey, status: "completed", scheduledDate: scheduledDate(5), completedDate: scheduledDate(5), actualAmount: 500000, memo: "" }
   ],
   fixedStatCategories: {
-    saving: ["installment_saving"],
-    expense: ["housing"],
-    subscription: ["subscription"],
-    emergency: ["emergency_fund"]
+    saving: [],
+    expense: [],
+    subscription: [],
+    emergency: []
   },
   expenses: [
-    { id: "expense_001", name: "점심", amount: 12000, categoryId: "food", type: "expense", date: isoDate(today), paymentMethod: "card", accountOrCard: "현대카드", memo: "" },
-    { id: "expense_002", name: "비상금 추가", amount: 100000, categoryId: "emergency_fund", type: "saving", date: isoDate(today), paymentMethod: "transfer", accountOrCard: "월급통장", memo: "" }
+    { id: "expense_001", name: "점심", amount: 12000, categoryId: "", type: "expense", date: isoDate(today), paymentMethod: "card", accountOrCard: "현대카드", memo: "" },
+    { id: "expense_002", name: "비상금 추가", amount: 100000, categoryId: "", type: "saving", date: isoDate(today), paymentMethod: "transfer", accountOrCard: "월급통장", memo: "" }
   ],
   goals: [
-    { id: "goal_001", name: "여행자금", targetAmount: 3000000, startDate: `${today.getFullYear()}-01-01`, endDate: `${today.getFullYear()}-12-31`, linkedCategoryIds: ["installment_saving", "emergency_fund"], linkedFixedExpenseIds: ["fixed_001"], initialAmount: 400000, memo: "연말 여행을 위한 저축 목표" }
+    { id: "goal_001", name: "여행자금", targetAmount: 3000000, startDate: `${today.getFullYear()}-01-01`, endDate: `${today.getFullYear()}-12-31`, linkedCategoryIds: [], linkedFixedExpenseIds: ["fixed_001"], initialAmount: 400000, memo: "연말 여행을 위한 저축 목표" }
   ]
 };
 
@@ -179,6 +172,7 @@ async function startAuthenticatedSession(user) {
     supabaseUserId = user.id;
     supabaseReady = true;
     document.body.classList.add("is-authenticated");
+    await clearStoredCategoriesOnce();
 
     const remoteState = await loadSupabaseState();
     if (remoteState) {
@@ -358,6 +352,20 @@ async function upsertSupabaseRows(table, rows, onConflict) {
   if (!rows.length) return;
   const { error } = await supabaseClient.from(table).upsert(rows, { onConflict });
   if (error) throw error;
+}
+
+async function clearStoredCategoriesOnce() {
+  const clearKey = `${CATEGORY_CLEAR_KEY}-${supabaseUserId}`;
+  if (localStorage.getItem(clearKey)) return;
+  const { error } = await supabaseClient.from("categories").delete().eq("user_id", supabaseUserId);
+  if (error) throw error;
+  localStorage.setItem(clearKey, "true");
+}
+
+async function deleteSupabaseRow(table, id) {
+  if (!supabaseReady || !supabaseClient || !isUuid(id)) return;
+  const { error } = await supabaseClient.from(table).delete().eq("id", id).eq("user_id", supabaseUserId);
+  if (error) console.warn(`${table} 삭제에 실패했습니다.`, error);
 }
 
 function normalizeStateIdsForSupabase() {
@@ -566,7 +574,7 @@ function renderFixed() {
       </div>
       ${fixedMonthCalendar(monthDate)}
       <section class="overview-block">
-        <p class="section-eyebrow">이번 달 고정지출</p>
+        <p class="section-eyebrow">이번 달 총합</p>
         <h2 class="overview-amount">${money(summary.planned)}</h2>
         <div class="overview-grid">
           ${highlightCards
@@ -584,12 +592,31 @@ function renderFixed() {
       <section class="list-block">
         <p class="section-eyebrow">이번 달 고정지출</p>
         <div class="fixed-list">
-          ${visibleItems.length ? visibleItems.map(fixedScreenshotItem).join("") : empty("이번 달 고정지출 내역이 없습니다.")}
+          ${visibleItems.length ? groupedFixedItems(visibleItems) : empty("이번 달 고정지출 내역이 없습니다.")}
         </div>
       </section>
     </section>
   `;
   bindCommonActions();
+}
+
+function groupedFixedItems(items) {
+  const groups = new Map();
+  items.forEach((item) => {
+    const day = Number(item.paymentDay || 1);
+    if (!groups.has(day)) groups.set(day, []);
+    groups.get(day).push(item);
+  });
+
+  return [...groups.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([day, dayItems]) => `
+      <section class="fixed-day-group">
+        <p class="fixed-day-label">${day}일</p>
+        <div class="fixed-day-list">${dayItems.map(fixedScreenshotItem).join("")}</div>
+      </section>
+    `)
+    .join("");
 }
 
 function fixedScreenshotItem(item) {
@@ -925,6 +952,7 @@ function handleAction(action, id, dataset = {}) {
   const actionMap = {
     "new-fixed": () => openFixedEditor(),
     "edit-fixed": () => openFixedEditor(findById(state.fixedExpenses, id)),
+    "delete-fixed": () => deleteFixedExpense(id),
     "toggle-fixed": () => toggleFixed(id),
     "open-day-fixed": () => openDayFixedDialog(dataset.date),
     "open-fixed-settings": () => openFixedSettingsDialog(),
@@ -936,6 +964,7 @@ function handleAction(action, id, dataset = {}) {
     "edit-account": () => openAccountEditor(findById(state.accounts, id)),
     "new-category": () => openCategoryEditor(),
     "edit-category": () => openCategoryEditor(findById(state.categories, id)),
+    "delete-category": () => deleteCategory(id),
     "new-goal": () => openGoalEditor(),
     "edit-goal": () => openGoalEditor(findById(state.goals, id))
   };
@@ -1031,7 +1060,10 @@ function fixedSettingsCard(item) {
           <input data-toggle-ended="${item.id}" type="checkbox" ${ended ? "checked" : ""} ${matured ? "disabled" : ""}>
           <span>${matured ? "만기 종료" : "종료된 고정지출"}</span>
         </label>
-        <button class="secondary-button" data-view-action="edit-fixed" data-id="${item.id}" type="button">수정</button>
+        <div class="settings-card-buttons">
+          <button class="secondary-button" data-view-action="edit-fixed" data-id="${item.id}" type="button">수정</button>
+          <button class="danger-button" data-view-action="delete-fixed" data-id="${item.id}" type="button">삭제</button>
+        </div>
       </div>
     </article>
   `;
@@ -1069,6 +1101,7 @@ function bindViewDialogActions(viewDialog) {
       const action = button.dataset.viewAction;
       if (action === "new-fixed") openFixedEditor();
       if (action === "edit-fixed") openFixedEditor(findById(state.fixedExpenses, button.dataset.id));
+      if (action === "delete-fixed") deleteFixedExpense(button.dataset.id);
       if (action === "configure-stat") openStatCategoryDialog(button.dataset.statKey);
     });
   });
@@ -1155,6 +1188,7 @@ function openCategoryEditor(item = {}) {
     field("icon", "아이콘", "text", item.icon || "•"),
     selectField("isActive", "상태", String(item.isActive ?? true), [["true", "활성"], ["false", "비활성"]])
   ]);
+  if (item.id) addEditorDeleteButton("카테고리 삭제", "delete-category", item.id);
 }
 
 function openGoalEditor(item = {}) {
@@ -1173,9 +1207,24 @@ function openGoalEditor(item = {}) {
 function openEditor(name, handler, id, htmlFields) {
   editorTitle.textContent = `${name} ${id ? "수정" : "추가"}`;
   fields.innerHTML = htmlFields.join("");
+  form.querySelector("[data-editor-delete]")?.remove();
   form.dataset.handler = handler;
   form.dataset.id = id || "";
   dialog.showModal();
+}
+
+function addEditorDeleteButton(label, action, id) {
+  form.querySelector("[data-editor-delete]")?.remove();
+  const button = document.createElement("button");
+  button.className = "danger-button";
+  button.dataset.editorDelete = "true";
+  button.type = "button";
+  button.textContent = label;
+  button.addEventListener("click", () => {
+    dialog.close();
+    handleAction(action, id);
+  });
+  form.querySelector(".sheet-actions")?.prepend(button);
 }
 
 const handlers = {
@@ -1252,12 +1301,13 @@ const handlers = {
   }
 };
 
-function toggleFixed(id) {
+async function toggleFixed(id) {
   const item = findById(state.fixedExpenses, id);
   const targetPeriodKey = spendingPeriodKey();
   const log = getLog(id, targetPeriodKey);
   if (log?.status === "completed") {
     state.fixedLogs = state.fixedLogs.filter((entry) => !(entry.fixedExpenseId === id && entry.periodKey === targetPeriodKey));
+    await deleteSupabaseRow("fixed_expense_logs", log.id);
   } else if (log) {
     log.status = "completed";
     log.completedDate = isoDate(today);
@@ -1265,6 +1315,49 @@ function toggleFixed(id) {
   } else {
     state.fixedLogs.push({ id: makeId("log"), fixedExpenseId: id, periodKey: targetPeriodKey, status: "completed", scheduledDate: scheduledDate(item.paymentDay, targetPeriodKey), completedDate: isoDate(today), actualAmount: Number(item.amount), memo: "" });
   }
+  saveState();
+  render();
+}
+
+async function deleteFixedExpense(id) {
+  const item = findById(state.fixedExpenses, id);
+  if (!item) return;
+  if (!confirm(`${item.name} 고정지출을 삭제할까요?`)) return;
+
+  closeViewDialog();
+  state.fixedExpenses = state.fixedExpenses.filter((entry) => entry.id !== id);
+  state.fixedLogs = state.fixedLogs.filter((entry) => entry.fixedExpenseId !== id);
+  state.goals.forEach((goal) => {
+    goal.linkedFixedExpenseIds = (goal.linkedFixedExpenseIds || []).filter((entryId) => entryId !== id);
+  });
+  await deleteSupabaseRow("fixed_expenses", id);
+  saveState();
+  render();
+}
+
+async function deleteCategory(id) {
+  const category = findById(state.categories, id);
+  if (!category) return;
+  const usedCount = state.fixedExpenses.filter((item) => item.categoryId === id).length + state.expenses.filter((item) => item.categoryId === id).length;
+  const message = usedCount
+    ? `${category.name} 카테고리를 삭제할까요? 연결된 ${usedCount}개 내역은 미분류로 변경됩니다.`
+    : `${category.name} 카테고리를 삭제할까요?`;
+  if (!confirm(message)) return;
+
+  state.categories = state.categories.filter((entry) => entry.id !== id);
+  state.fixedExpenses.forEach((item) => {
+    if (item.categoryId === id) item.categoryId = "";
+  });
+  state.expenses.forEach((item) => {
+    if (item.categoryId === id) item.categoryId = "";
+  });
+  state.goals.forEach((goal) => {
+    goal.linkedCategoryIds = (goal.linkedCategoryIds || []).filter((entryId) => entryId !== id);
+  });
+  Object.keys(state.fixedStatCategories || {}).forEach((key) => {
+    state.fixedStatCategories[key] = state.fixedStatCategories[key].filter((entryId) => entryId !== id);
+  });
+  await deleteSupabaseRow("categories", id);
   saveState();
   render();
 }
@@ -1447,7 +1540,7 @@ function accountOptions() {
 }
 
 function categoryOptions(tab) {
-  return state.categories.filter((item) => item.isActive && item.availableTabs.includes(tab)).map((item) => [item.id, `${item.icon || ""} ${item.name}`]);
+  return [["", "미분류"], ...state.categories.filter((item) => item.isActive && item.availableTabs.includes(tab)).map((item) => [item.id, `${item.icon || ""} ${item.name}`])];
 }
 
 function getFixedStatus(item, targetPeriodKey = periodKey) {
@@ -1644,9 +1737,7 @@ function buildCalendarDays(monthDate) {
 }
 
 function addMonths(baseDate, offset) {
-  const date = new Date(baseDate);
-  date.setMonth(date.getMonth() + offset);
-  return date;
+  return new Date(baseDate.getFullYear(), baseDate.getMonth() + offset, 1);
 }
 
 function toPeriodKey(date) {

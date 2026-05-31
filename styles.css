@@ -224,7 +224,7 @@ h3 {
 
 .mode-tabs {
   display: flex;
-  gap: 18px;
+  gap: 8px;
   align-items: center;
 }
 
@@ -463,6 +463,23 @@ h3 {
 }
 
 .fixed-list {
+  display: grid;
+  gap: 10px;
+}
+
+.fixed-day-group {
+  display: grid;
+  gap: 8px;
+}
+
+.fixed-day-label {
+  color: #646464;
+  font-size: 13px;
+  font-weight: 600;
+  padding-left: 2px;
+}
+
+.fixed-day-list {
   display: grid;
   gap: 10px;
 }
@@ -1221,6 +1238,12 @@ h3 {
   justify-content: space-between;
   gap: 10px;
   padding: 0 2px;
+}
+
+.settings-card-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .toggle-row {
