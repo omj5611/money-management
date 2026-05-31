@@ -626,13 +626,14 @@ function fixedScreenshotItem(item) {
   const category = findById(state.categories, item.categoryId);
   const maturity = item.maturityDate ? `<span class="maturity-pill">${escapeHtml(formatShortDate(item.maturityDate))} 만기</span>` : "";
   const done = getFixedStatus(item, spendingPeriodKey()) === "completed";
+  const categoryIcon = category?.icon ? `<span class="fixed-category-icon">${escapeHtml(category.icon)}</span>` : "";
   return `
     <article class="fixed-screenshot-card">
       <button class="check-button ${done ? "done" : ""}" data-action="toggle-fixed" data-id="${item.id}" type="button" aria-label="${done ? "지출 완료 해제" : "지출 완료 체크"}" aria-pressed="${done}">${done ? lineIcon("check") : ""}</button>
       <div class="fixed-screenshot-main">
         <div class="fixed-screenshot-top">
           <span class="fixed-screenshot-title"><span class="fixed-screenshot-name">${escapeHtml(item.name || "월세")}</span>${maturity}</span>
-          <span class="fixed-screenshot-badge">${lineIcon("wallet")} ${escapeHtml(category?.name || "미분류")} · 매달 ${item.paymentDay || 1}일</span>
+          <span class="fixed-screenshot-badge">${categoryIcon}${escapeHtml(category?.name || "미분류")} · 매달 ${item.paymentDay || 1}일</span>
         </div>
         <strong class="fixed-screenshot-amount">${money(item.amount || 500000)}</strong>
         <p class="fixed-screenshot-sub">${escapeHtml(account?.name || "출금통장 미지정")} -> ${escapeHtml(item.toAccount || "입금통장 미지정")} · ${transferLabel(item.transferType)}</p>
