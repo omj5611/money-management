@@ -230,9 +230,10 @@ async function handleAuthSubmit(mode, email, password) {
   }
 
   const buttonText = mode === "signup" ? "회원가입" : "로그인";
+  const emailRedirectTo = `${window.location.origin}${window.location.pathname}`;
   try {
     const { data, error } = mode === "signup"
-      ? await supabaseClient.auth.signUp({ email, password })
+      ? await supabaseClient.auth.signUp({ email, password, options: { emailRedirectTo } })
       : await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) throw error;
 
